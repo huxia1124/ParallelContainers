@@ -13,10 +13,10 @@
 #include <concurrent_unordered_set.h>
 
 
-const int count = 200000;	//Test elements
-const int thread_count = 8;
+const int count = 200000;		//Number of test elements
+const int thread_count = 8;		//Number of parallel threads to run the test cases
 
-void test_std_set_insert(std::set<int> &intSetStd)
+void test_std_set_insert(std::set<int> &intSet)
 {
 	//////////////////////////////////////////////////////////////////////////
 	//STL set
@@ -28,18 +28,17 @@ void test_std_set_insert(std::set<int> &intSetStd)
 		for (int i = count * t; i < count * (t + 1); i++)
 		{
 #pragma omp critical
-			intSetStd.insert(i);
+			intSet.insert(i);
 		}
 	}
 
 #pragma 
 	auto end = std::chrono::high_resolution_clock::now();
-	std::cout << "Insertion:       \t" << intSetStd.size() << " items! " << std::endl;
+	std::cout << "Insertion:       \t" << intSet.size() << " items! " << std::endl;
 	std::cout << "Insertion:       " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms elapsed." << std::endl;
-
 }
 
-void test_std_set_searching(std::set<int> &intSetStd)
+void test_std_set_searching(std::set<int> &intSet)
 {
 	//////////////////////////////////////////////////////////////////////////
 	//STL set
@@ -54,8 +53,8 @@ void test_std_set_searching(std::set<int> &intSetStd)
 		{
 #pragma omp critical
 			{
-				auto found = intSetStd.find(((rand() * rand() + rand()) % count) + count * t);
-				if (found != intSetStd.end())
+				auto found = intSet.find(((rand() * rand() + rand()) % count) + count * t);
+				if (found != intSet.end())
 					totalFound++;
 			}
 		}
@@ -68,7 +67,7 @@ void test_std_set_searching(std::set<int> &intSetStd)
 	std::cout << "Searching:       " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms elapsed." << std::endl;
 }
 
-void test_std_set_erasing(std::set<int> &intSetStd)
+void test_std_set_erasing(std::set<int> &intSet)
 {
 	//////////////////////////////////////////////////////////////////////////
 	//STL set
@@ -82,13 +81,13 @@ void test_std_set_erasing(std::set<int> &intSetStd)
 		for (int i = count * t; i < count * (t + 1); i++)
 		{
 #pragma omp critical
-			intSetStd.erase(i);
+			intSet.erase(i);
 		}
 	}
 #pragma 
 	auto end = std::chrono::high_resolution_clock::now();
 	std::cout << "Erasing:         " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms elapsed." << std::endl;
-	std::cout << "Now:             \t" << intSetStd.size() << " items! " << std::endl;
+	std::cout << "Now:             \t" << intSet.size() << " items! " << std::endl;
 }
 
 void test_concurrent_set_insert(Concurrency::concurrent_unordered_set<int> &intSet)
@@ -235,7 +234,7 @@ void test_high_performance_erasing(CSTXHashSet<int, thread_count> &intSet)
 int main()
 {
 	srand((unsigned int)time(nullptr));
-	omp_set_num_threads(thread_count);		//Number of threads
+	omp_set_num_threads(thread_count);		//Setup threads number for OpenMP
 
 	std::cout << "---------- STL set (std::set) ----------" << std::endl;
 	std::set<int> intSetStd;
