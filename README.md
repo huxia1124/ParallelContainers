@@ -4,7 +4,9 @@ Parallel high performance C++ containers, including a **set** class and a **map*
 These containers distribute the inserting, finding and erasing operations to multiple containers to decrease the chance of waiting. This makes better use of multi-core CPU power.
 
 ## Sample performance test results, using OpenMP for multi-threading.
-> on Intel® Core™ i7-3740QM Processor
+>> CPU: Intel Core i7 3740QM
+<br> 1600000 integer items were inserted, searched and erased
+<br> 8 parallel threads
 
 ```
 ---------- STL set (std::set) ----------
@@ -37,3 +39,7 @@ Now:                    0 items!
 ##![Concurrent set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/concurrent_set.png)
 ##![High Performance set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/high_performance_set.png)
 
+> The above results were measured under the following configuration:
+>> CPU: Intel Core i7 3740QM
+<br> 12800000 integer items were inserted, searched and erased
+<br> 8 parallel threads
