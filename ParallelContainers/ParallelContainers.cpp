@@ -245,15 +245,13 @@ int main()
 	test_std_set_erasing(intSetStd);
 	std::cout << std::endl;
 	
-
-	/*
 	std::cout << "---------- Concurrent set (Concurrency::concurrent_unordered_set) ----------" << std::endl;
 	Concurrency::concurrent_unordered_set<int> intConcurrentSet;
 	test_concurrent_set_insert(intConcurrentSet);
 	test_concurrent_set_searching(intConcurrentSet);
 	test_concurrent_set_erasing(intConcurrentSet);
 	std::cout << std::endl;
-	/*
+
 	std::cout << "---------- High Performance set ----------" << std::endl;
 	CSTXHashSet<int, hash_size> intSet;
 	test_high_performance_set_insert(intSet);
@@ -261,7 +259,6 @@ int main()
 	test_high_performance_erasing(intSet);
 	std::cout << std::endl;
 	
-	//*/
 	return 0;
 }
 
