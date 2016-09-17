@@ -13,8 +13,9 @@
 #include <concurrent_unordered_set.h>
 
 
-const int count = 200000;		//Number of test elements
+const int count = 1600000;		//Number of test elements
 const int thread_count = 8;		//Number of parallel threads to run the test cases
+const int hash_size = thread_count * 32;
 
 void test_std_set_insert(std::set<int> &intSet)
 {
@@ -161,7 +162,7 @@ void test_concurrent_set_erasing(Concurrency::concurrent_unordered_set<int> &int
 	std::cout << "Now:             \t" << intSet.size() << " items! " << std::endl;
 }
 
-void test_high_performance_set_insert(CSTXHashSet<int, thread_count> &intSet)
+void test_high_performance_set_insert(CSTXHashSet<int, hash_size> &intSet)
 {
 	//////////////////////////////////////////////////////////////////////////
 	//CSTXHashSet
@@ -181,7 +182,7 @@ void test_high_performance_set_insert(CSTXHashSet<int, thread_count> &intSet)
 
 }
 
-void test_high_performance_set_searching(CSTXHashSet<int, thread_count> &intSet)
+void test_high_performance_set_searching(CSTXHashSet<int, hash_size> &intSet)
 {
 	//////////////////////////////////////////////////////////////////////////
 	//CSTXHashSet set
@@ -208,7 +209,7 @@ void test_high_performance_set_searching(CSTXHashSet<int, thread_count> &intSet)
 	std::cout << "Searching:       " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms elapsed." << std::endl;
 }
 
-void test_high_performance_erasing(CSTXHashSet<int, thread_count> &intSet)
+void test_high_performance_erasing(CSTXHashSet<int, hash_size> &intSet)
 {
 	//////////////////////////////////////////////////////////////////////////
 	//CSTXHashSet set
@@ -236,28 +237,31 @@ int main()
 	srand((unsigned int)time(nullptr));
 	omp_set_num_threads(thread_count);		//Setup threads number for OpenMP
 
+	
 	std::cout << "---------- STL set (std::set) ----------" << std::endl;
 	std::set<int> intSetStd;
 	test_std_set_insert(intSetStd);
 	test_std_set_searching(intSetStd);
 	test_std_set_erasing(intSetStd);
 	std::cout << std::endl;
+	
 
+	/*
 	std::cout << "---------- Concurrent set (Concurrency::concurrent_unordered_set) ----------" << std::endl;
 	Concurrency::concurrent_unordered_set<int> intConcurrentSet;
 	test_concurrent_set_insert(intConcurrentSet);
 	test_concurrent_set_searching(intConcurrentSet);
 	test_concurrent_set_erasing(intConcurrentSet);
 	std::cout << std::endl;
-
+	/*
 	std::cout << "---------- High Performance set ----------" << std::endl;
-	CSTXHashSet<int, thread_count> intSet;
+	CSTXHashSet<int, hash_size> intSet;
 	test_high_performance_set_insert(intSet);
 	test_high_performance_set_searching(intSet);
 	test_high_performance_erasing(intSet);
 	std::cout << std::endl;
 	
-	
+	//*/
 	return 0;
 }
 
