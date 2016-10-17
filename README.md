@@ -35,11 +35,14 @@ Now:                    0 items!
 ```
 
 
-##STL set![STL set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/stl_set.png?v2)
+##STL set<br/>
+![STL set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/stl_set.png?v2)
 
-##Concurrent set![Concurrent set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/concurrent_set.png?v2)
+##Concurrent set<br/>
+![Concurrent set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/concurrent_set.png?v2)
 
-##High Performance set![High Performance set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/high_performance_set.png?v2)
+##High Performance set<br/>
+![High Performance set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/high_performance_set.png?v2)
  
 
 > The above results were measured under the following configuration:
