@@ -13,9 +13,9 @@
 #include <concurrent_unordered_set.h>
 
 
-const int count = 1600000;		//Number of test elements
+const int count = 800000;		//Number of test elements
 const int thread_count = 8;		//Number of parallel threads to run the test cases
-const int hash_size = thread_count * 32;
+const int hash_size = thread_count * 4;
 
 void test_std_set_insert(std::set<int> &intSet)
 {

@@ -15,15 +15,14 @@
 //CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 //DEALINGS IN THE SOFTWARE.
 
-#pragma once
-
 #include <map>
-#include <windows.h>
+
+#pragma once
 #include <unordered_map>
 #include <map>
 #include <set>
-#include <tchar.h>
 #include <algorithm>
+#include <mutex>
 
 //////////////////////////////////////////////////////////////////////////
 // 
@@ -34,7 +33,7 @@ class CSTXDefaultHash
 public:
 	size_t operator()(const T &refValue)
 	{
-		return ((const __int64)refValue / nStep) % nHashSize;
+		return ((const int64_t)refValue / nStep) % nHashSize;
 	}
 };
 
@@ -44,7 +43,6 @@ class CSTXDefaultStringHash
 public:
 	size_t operator()(const std::string &refValue)
 	{
-
 		return (std::hash<std::string>()(refValue) / nStep) % nHashSize;
 	}
 };
@@ -81,7 +79,7 @@ class CSTXHashMap
 public:
 	CSTXHashMap()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i];	//Create Objects;
 		}
@@ -89,40 +87,30 @@ public:
 protected:
 	struct HashMapValue
 	{
-		bool bCSInitialized;
-		CRITICAL_SECTION cs;
+		std::recursive_mutex mtx;
 		std::map<TKey, TValue> mapContent;
 		HashMapValue()
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 		}
 		~HashMapValue()
 		{
-			DeleteCriticalSection(&cs);
 		}
 		HashMapValue(const HashMapValue &val)
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 			*this = val;
 		}
 		HashMapValue &operator=(const HashMapValue &val)
 		{
-			if (!bCSInitialized)
-				InitializeCriticalSection(&cs);
 			mapContent = val.mapContent;
 			return *this;
 		}
 		void Lock()
 		{
-			EnterCriticalSection(&cs);
-			lock.EnterLock();
+			mtx.lock();
 		}
 		void Unlock()
 		{
-			LeaveCriticalSection(&cs);
-			lock.LeaveLock();
+			mtx.unlock();
 		}
 	};
 
@@ -140,14 +128,14 @@ public:
 	size_t erase(TKey _Keyval);
 	void clear()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i].mapContent.clear();
 		}
 	}
 
 public:
-	_Type_iterator erase(_Type_iterator _itval)
+	_Type_iterator erase( _Type_iterator _itval )
 	{
 		size_t nHashed = THashClass()(_itval->first);
 		HashMapValue &value = _mapValues[nHashed];
@@ -157,7 +145,7 @@ public:
 
 		return refResult;
 	}
-	_Type_iterator find(TKey _Keyval)
+	_Type_iterator find( TKey _Keyval )
 	{
 		size_t nHashed = THashClass()(_Keyval);
 		HashMapValue &value = _mapValues[nHashed];
@@ -167,7 +155,37 @@ public:
 
 		return refResult;
 	}
-	// 	_Type_iterator begin()	//No default implements
+	TValue findValue(TKey _Keyval, TValue defaultValue)
+	{
+		size_t nHashed = THashClass()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.mapContent.find(_Keyval);
+		if (refResult != value.mapContent.end())
+			defaultValue = refResult->second;
+		value.Unlock();
+		return defaultValue;
+	}
+	TValue findValueAndPerform(TKey _Keyval, TValue defaultValue, std::function<void(TValue&)> pfnFoundPerform, std::function<void(std::map<TKey, TValue>&)> pfnFailPerform)
+	{
+		size_t nHashed = THashClass()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.mapContent.find(_Keyval);
+		if (refResult != value.mapContent.end())
+		{
+			defaultValue = refResult->second;
+			pfnFoundPerform(defaultValue);
+		}
+		else
+		{
+			if (pfnFailPerform)
+				pfnFailPerform(value.mapContent);
+		}
+		value.Unlock();
+		return defaultValue;
+	}
+// 	_Type_iterator begin()	//No default implements
 	_Type_iterator end(TKey _Keyval)
 	{
 		size_t nHashed = THashClass()(_Keyval);
@@ -177,8 +195,8 @@ public:
 	template<typename TFunc>
 	void foreach(TFunc pfnFunc)
 	{
-		std::unordered_map<size_t, HashMapValue>::iterator it = _mapValues.begin();
-		for (; it != _mapValues.end(); it++)
+		typename std::unordered_map<size_t, HashMapValue>::iterator it = _mapValues.begin();
+		for(;it!=_mapValues.end();it++)
 		{
 			(*it).second.Lock();
 			std::for_each((*it).second.mapContent.begin(), (*it).second.mapContent.end(), pfnFunc);
@@ -199,7 +217,7 @@ public:
 	}
 	void lockall()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for (size_t i = 0; i<nHashSize; i++)
 		{
 			HashMapValue &value = _mapValues[i];
 			value.Lock();
@@ -207,7 +225,7 @@ public:
 	}
 	void unlockall()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for (size_t i = 0; i<nHashSize; i++)
 		{
 			HashMapValue &value = _mapValues[i];
 			value.Unlock();
@@ -218,7 +236,7 @@ public:
 
 
 template<typename TKey, typename TValue, int nHashSize /*= 8*/, int nStep /*= 1*/, typename THashClass>
-size_t CSTXHashMap<TKey, TValue, nHashSize, nStep, THashClass>::erase(TKey _Keyval)
+size_t CSTXHashMap<TKey, TValue, nHashSize, nStep, THashClass>::erase( TKey _Keyval )
 {
 	size_t nHashed = THashClass()(_Keyval);// ((_Keyval / nStep) % nHashSize);
 	HashMapValue &value = _mapValues[nHashed];
@@ -233,7 +251,7 @@ template<typename TKey, typename TValue, int nHashSize /*= 4*/, int nStep /*= 1*
 size_t CSTXHashMap<TKey, TValue, nHashSize, nStep, THashClass>::size()
 {
 	size_t sizeTotal = 0;
-	for (size_t i = 0; i < nHashSize; i++)
+	for(size_t i=0;i<nHashSize;i++)
 	{
 		sizeTotal += _mapValues[i].mapContent.size();
 	}
@@ -241,7 +259,7 @@ size_t CSTXHashMap<TKey, TValue, nHashSize, nStep, THashClass>::size()
 }
 
 template<typename TKey, typename TValue, int nHashSize /*= 4*/, int nStep /*= 1*/, typename THashClass>
-TValue& CSTXHashMap<TKey, TValue, nHashSize, nStep, THashClass>::operator[](const TKey& refKey)
+TValue& CSTXHashMap<TKey, TValue, nHashSize, nStep, THashClass>::operator[]( const TKey& refKey )
 {
 	size_t nHashed = THashClass()(refKey);
 	HashMapValue &value = _mapValues[nHashed];
@@ -262,7 +280,7 @@ class CSTXHashMap<std::string, TValue, nHashSize, nStep, CSTXDefaultStringHash<n
 public:
 	CSTXHashMap()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i];	//Create Objects;
 		}
@@ -270,40 +288,30 @@ public:
 protected:
 	struct HashMapValue
 	{
-		bool bCSInitialized;
-		CRITICAL_SECTION cs;
+		std::recursive_mutex mtx;
 		std::map<std::string, TValue> mapContent;
 		HashMapValue()
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 		}
 		~HashMapValue()
 		{
-			DeleteCriticalSection(&cs);
 		}
 		HashMapValue(const HashMapValue &val)
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 			*this = val;
 		}
 		HashMapValue &operator=(const HashMapValue &val)
 		{
-			if (!bCSInitialized)
-				InitializeCriticalSection(&cs);
 			mapContent = val.mapContent;
 			return *this;
 		}
 		void Lock()
 		{
-			EnterCriticalSection(&cs);
-			lock.EnterLock();
+			mtx.lock();
 		}
 		void Unlock()
 		{
-			LeaveCriticalSection(&cs);
-			lock.LeaveLock();
+			mtx.unlock();
 		}
 
 	};
@@ -322,16 +330,16 @@ public:
 	size_t erase(std::string _Keyval);
 	void clear()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i].mapContent.clear();
 		}
 	}
 
 public:
-	_Type_iterator erase(_Type_iterator _itval)
+	_Type_iterator erase( _Type_iterator _itval )
 	{
-		size_t nHashed = THashClass()(_itval->first);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_itval->first);
 		HashMapValue &value = _mapValues[nHashed];
 		value.Lock();
 		_Type_iterator refResult = value.mapContent.erase(_itval);
@@ -339,9 +347,9 @@ public:
 
 		return refResult;
 	}
-	_Type_iterator find(std::string _Keyval)
+	_Type_iterator find( std::string _Keyval )
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashMapValue &value = _mapValues[nHashed];
 		value.Lock();
 		_Type_iterator refResult = value.mapContent.find(_Keyval);
@@ -349,18 +357,48 @@ public:
 
 		return refResult;
 	}
+	TValue findValue(std::string _Keyval, TValue defaultValue)
+	{
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.mapContent.find(_Keyval);
+		if (refResult != value.mapContent.end())
+			defaultValue = refResult->second;
+		value.Unlock();
+		return defaultValue;
+	}
+	TValue findValueAndPerform(std::string _Keyval, TValue defaultValue, std::function<void(TValue&)> pfnFoundPerform, std::function<void(std::map<std::string, TValue>&)> pfnFailPerform)
+	{
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.mapContent.find(_Keyval);
+		if (refResult != value.mapContent.end())
+		{
+			defaultValue = refResult->second;
+			pfnFoundPerform(defaultValue);
+		}
+		else
+		{
+			if (pfnFailPerform)
+				pfnFailPerform(value.mapContent);
+		}
+		value.Unlock();
+		return defaultValue;
+	}
 	// 	_Type_iterator begin()	//No default implements
 	_Type_iterator end(std::string _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashMapValue &value = _mapValues[nHashed];
 		return value.mapContent.end();
 	}
 	template<typename TFunc>
 	void foreach(TFunc pfnFunc)
 	{
-		std::unordered_map<size_t, HashMapValue>::iterator it = _mapValues.begin();
-		for (; it != _mapValues.end(); it++)
+		typename std::unordered_map<size_t, HashMapValue>::iterator it = _mapValues.begin();
+		for(;it!=_mapValues.end();it++)
 		{
 			(*it).second.Lock();
 			std::for_each((*it).second.mapContent.begin(), (*it).second.mapContent.end(), pfnFunc);
@@ -369,19 +407,19 @@ public:
 	}
 	void lock(std::string _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashMapValue &value = _mapValues[nHashed];
 		value.Lock();
 	}
 	void unlock(std::string _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashMapValue &value = _mapValues[nHashed];
 		value.Unlock();
 	}
 	void lockall()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for (size_t i = 0; i<nHashSize; i++)
 		{
 			HashMapValue &value = _mapValues[i];
 			value.Lock();
@@ -389,7 +427,7 @@ public:
 	}
 	void unlockall()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for (size_t i = 0; i<nHashSize; i++)
 		{
 			HashMapValue &value = _mapValues[i];
 			value.Unlock();
@@ -401,7 +439,7 @@ public:
 template<typename TValue, int nHashSize /*= 8*/, int nStep /*= 1*/>
 size_t CSTXHashMap<std::string, TValue, nHashSize, nStep, CSTXDefaultStringHash<nHashSize, nStep>>::erase(std::string _Keyval)
 {
-	size_t nHashed = THashClass()(_Keyval);
+	size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 	HashMapValue &value = _mapValues[nHashed];
 	value.Lock();
 	size_t refResult = value.mapContent.erase(_Keyval);
@@ -414,7 +452,7 @@ template<typename TValue, int nHashSize /*= 4*/, int nStep /*= 1*/>
 size_t CSTXHashMap<std::string, TValue, nHashSize, nStep, CSTXDefaultStringHash<nHashSize, nStep>>::size()
 {
 	size_t sizeTotal = 0;
-	for (size_t i = 0; i < nHashSize; i++)
+	for(size_t i=0;i<nHashSize;i++)
 	{
 		sizeTotal += _mapValues[i].mapContent.size();
 	}
@@ -424,7 +462,7 @@ size_t CSTXHashMap<std::string, TValue, nHashSize, nStep, CSTXDefaultStringHash<
 template<typename TValue, int nHashSize /*= 4*/, int nStep /*= 1*/>
 TValue& CSTXHashMap<std::string, TValue, nHashSize, nStep, CSTXDefaultStringHash<nHashSize, nStep>>::operator[](const std::string& refKey)
 {
-	size_t nHashed = THashClass()(_Keyval);
+	size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(refKey);
 	HashMapValue &value = _mapValues[nHashed];
 	value.Lock();
 	TValue& refFinalValue = value.mapContent[refKey];
@@ -443,7 +481,7 @@ class CSTXHashMap<std::wstring, TValue, nHashSize, nStep, CSTXDefaultWStringHash
 public:
 	CSTXHashMap()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i];	//Create Objects;
 		}
@@ -451,40 +489,30 @@ public:
 protected:
 	struct HashMapValue
 	{
-		bool bCSInitialized;
-		CRITICAL_SECTION cs;
+		std::recursive_mutex mtx;
 		std::map<std::wstring, TValue> mapContent;
 		HashMapValue()
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 		}
 		~HashMapValue()
 		{
-			DeleteCriticalSection(&cs);
 		}
 		HashMapValue(const HashMapValue &val)
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 			*this = val;
 		}
 		HashMapValue &operator=(const HashMapValue &val)
 		{
-			if (!bCSInitialized)
-				InitializeCriticalSection(&cs);
 			mapContent = val.mapContent;
 			return *this;
 		}
 		void Lock()
 		{
-			EnterCriticalSection(&cs);
-			lock.EnterLock();
+			mtx.lock();
 		}
 		void Unlock()
 		{
-			LeaveCriticalSection(&cs);
-			lock.LeaveLock();
+			mtx.unlock();
 		}
 
 	};
@@ -503,14 +531,14 @@ public:
 	size_t erase(std::wstring _Keyval);
 	void clear()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i].mapContent.clear();
 		}
 	}
 
 public:
-	_Type_iterator erase(_Type_iterator _itval)
+	_Type_iterator erase( _Type_iterator _itval )
 	{
 		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_itval->first);
 		HashMapValue &value = _mapValues[nHashed];
@@ -520,7 +548,7 @@ public:
 
 		return refResult;
 	}
-	_Type_iterator find(std::wstring _Keyval)
+	_Type_iterator find( std::wstring _Keyval )
 	{
 		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
 		HashMapValue &value = _mapValues[nHashed];
@@ -530,6 +558,37 @@ public:
 
 		return refResult;
 	}
+	TValue findValue(std::wstring _Keyval, TValue defaultValue)
+	{
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.mapContent.find(_Keyval);
+		if (refResult != value.mapContent.end())
+			defaultValue = refResult->second;
+		value.Unlock();
+		return defaultValue;
+	}
+	TValue findValueAndPerform(std::wstring _Keyval, TValue defaultValue, std::function<void(TValue&)> pfnFoundPerform, std::function<void(std::map<std::wstring, TValue>&)> pfnFailPerform)
+	{
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.mapContent.find(_Keyval);
+		if (refResult != value.mapContent.end())
+		{
+			defaultValue = refResult->second;
+			pfnFoundPerform(defaultValue);
+		}
+		else
+		{
+			if(pfnFailPerform)
+				pfnFailPerform(value.mapContent);
+		}
+		value.Unlock();
+		return defaultValue;
+	}
+
 	// 	_Type_iterator begin()	//No default implements
 	_Type_iterator end(std::wstring _Keyval)
 	{
@@ -540,8 +599,8 @@ public:
 	template<typename TFunc>
 	void foreach(TFunc pfnFunc)
 	{
-		std::unordered_map<size_t, HashMapValue>::iterator it = _mapValues.begin();
-		for (; it != _mapValues.end(); it++)
+		typename std::unordered_map<size_t, HashMapValue>::iterator it = _mapValues.begin();
+		for(;it!=_mapValues.end();it++)
 		{
 			(*it).second.Lock();
 			std::for_each((*it).second.mapContent.begin(), (*it).second.mapContent.end(), pfnFunc);
@@ -562,7 +621,7 @@ public:
 	}
 	void lockall()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for (size_t i = 0; i<nHashSize; i++)
 		{
 			HashMapValue &value = _mapValues[i];
 			value.Lock();
@@ -570,7 +629,7 @@ public:
 	}
 	void unlockall()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for (size_t i = 0; i<nHashSize; i++)
 		{
 			HashMapValue &value = _mapValues[i];
 			value.Unlock();
@@ -595,7 +654,7 @@ template<typename TValue, int nHashSize /*= 4*/, int nStep /*= 1*/>
 size_t CSTXHashMap<std::wstring, TValue, nHashSize, nStep, CSTXDefaultWStringHash<nHashSize, nStep>>::size()
 {
 	size_t sizeTotal = 0;
-	for (size_t i = 0; i < nHashSize; i++)
+	for(size_t i=0;i<nHashSize;i++)
 	{
 		sizeTotal += _mapValues[i].mapContent.size();
 	}
@@ -625,7 +684,7 @@ class CSTXHashSet
 public:
 	CSTXHashSet()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i];	//Create Objects;
 		}
@@ -633,38 +692,30 @@ public:
 protected:
 	struct HashSetValue
 	{
-		bool bCSInitialized;
-		CRITICAL_SECTION cs;
+		std::recursive_mutex mtx;
 		std::set<TKey> setContent;
 		HashSetValue()
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 		}
 		~HashSetValue()
 		{
-			DeleteCriticalSection(&cs);
 		}
 		HashSetValue(const HashSetValue &val)
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 			*this = val;
 		}
 		HashSetValue &operator=(const HashSetValue &val)
 		{
-			if (!bCSInitialized)
-				InitializeCriticalSection(&cs);
 			setContent = val.setContent;
 			return *this;
 		}
 		void Lock()
 		{
-			EnterCriticalSection(&cs);
+			mtx.lock();
 		}
 		void Unlock()
 		{
-			LeaveCriticalSection(&cs);
+			mtx.unlock();
 		}
 
 	};
@@ -683,14 +734,14 @@ public:
 	size_t erase(TKey _Keyval);
 	void clear()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i].setContent.clear();
 		}
 	}
 
 public:
-	_Type_iterator erase(_Type_iterator _itval)
+	_Type_iterator erase( _Type_iterator _itval )
 	{
 		size_t nHashed = THashClass()(*_itval); // (((DWORD_PTR)(*_itval) / nStep) % nHashSize);
 		HashSetValue &value = _mapValues[nHashed];
@@ -700,7 +751,7 @@ public:
 
 		return refResult;
 	}
-	_Type_iterator find(TKey _Keyval)
+	_Type_iterator find( TKey _Keyval )
 	{
 		size_t nHashed = THashClass()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
@@ -710,7 +761,19 @@ public:
 
 		return refResult;
 	}
-	void insert(TKey _Keyval)
+	bool isValueExists(TKey _Keyval)
+	{
+		bool result = false;
+		size_t nHashed = THashClass()(_Keyval);
+		HashSetValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.setContent.find(_Keyval);
+		if (refResult != value.setContent.end())
+			result = true;
+		value.Unlock();
+		return result;
+	}
+	void insert( TKey _Keyval )
 	{
 		size_t nHashed = THashClass()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
@@ -727,8 +790,8 @@ public:
 	template<typename TFunc>
 	void foreach(TFunc pfnFunc)
 	{
-		std::unordered_map<size_t, HashSetValue>::iterator it = _mapValues.begin();
-		for (; it != _mapValues.end(); it++)
+		typename std::unordered_map<size_t, HashSetValue>::iterator it = _mapValues.begin();
+		for(;it!=_mapValues.end();it++)
 		{
 			(*it).second.Lock();
 			std::for_each((*it).second.setContent.begin(), (*it).second.setContent.end(), pfnFunc);
@@ -753,7 +816,7 @@ template<typename TKey, int nHashSize /*= 8*/, int nStep /*= 1*/, typename THash
 size_t CSTXHashSet<TKey, nHashSize, nStep, THashClass>::size()
 {
 	size_t sizeTotal = 0;
-	for (size_t i = 0; i < nHashSize; i++)
+	for(size_t i=0;i<nHashSize;i++)
 	{
 		sizeTotal += _mapValues[i].setContent.size();
 	}
@@ -762,7 +825,7 @@ size_t CSTXHashSet<TKey, nHashSize, nStep, THashClass>::size()
 
 
 template<typename TKey, int nHashSize /*= 8*/, int nStep /*= 1*/, typename THashClass>
-size_t CSTXHashSet<TKey, nHashSize, nStep, THashClass>::erase(TKey _Keyval)
+size_t CSTXHashSet<TKey, nHashSize, nStep, THashClass>::erase( TKey _Keyval )
 {
 	size_t nHashed = THashClass()(_Keyval);
 	HashSetValue &value = _mapValues[nHashed];
@@ -784,7 +847,7 @@ class CSTXHashSet<std::string, nHashSize, nStep, CSTXDefaultStringHash<nHashSize
 public:
 	CSTXHashSet()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i];	//Create Objects;
 		}
@@ -792,40 +855,30 @@ public:
 protected:
 	struct HashSetValue
 	{
-		bool bCSInitialized;
-		CRITICAL_SECTION cs;
+		std::recursive_mutex mtx;
 		std::set<std::string> setContent;
 		HashSetValue()
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 		}
 		~HashSetValue()
 		{
-			DeleteCriticalSection(&cs);
 		}
 		HashSetValue(const HashSetValue &val)
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 			*this = val;
 		}
 		HashSetValue &operator=(const HashSetValue &val)
 		{
-			if (!bCSInitialized)
-				InitializeCriticalSection(&cs);
 			setContent = val.setContent;
 			return *this;
 		}
 		void Lock()
 		{
-			EnterCriticalSection(&cs);
-			lock.EnterLock();
+			mtx.lock();
 		}
 		void Unlock()
 		{
-			LeaveCriticalSection(&cs);
-			lock.LeaveLock();
+			mtx.unlock();
 		}
 
 	};
@@ -844,16 +897,16 @@ public:
 	size_t erase(std::string _Keyval);
 	void clear()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i].setContent.clear();
 		}
 	}
 
 public:
-	_Type_iterator erase(_Type_iterator _itval)
+	_Type_iterator erase( _Type_iterator _itval )
 	{
-		size_t nHashed = THashClass()(*_itval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(*_itval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Lock();
 		_Type_iterator refResult = value.setContent.erase(_itval);
@@ -861,9 +914,9 @@ public:
 
 		return refResult;
 	}
-	_Type_iterator find(std::string _Keyval)
+	_Type_iterator find( std::string _Keyval )
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Lock();
 		_Type_iterator refResult = value.setContent.find(_Keyval);
@@ -871,9 +924,21 @@ public:
 
 		return refResult;
 	}
-	void insert(std::string _Keyval)
+	bool isValueExists(std::string _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		bool result = false;
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
+		HashSetValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.setContent.find(_Keyval);
+		if (refResult != value.setContent.end())
+			result = true;
+		value.Unlock();
+		return result;
+	}
+	void insert( std::string _Keyval )
+	{
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Lock();
 		value.setContent.insert(_Keyval);
@@ -881,15 +946,15 @@ public:
 	}
 	_Type_iterator end(std::string _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		return value.setContent.end();
 	}
 	template<typename TFunc>
 	void foreach(TFunc pfnFunc)
 	{
-		std::unordered_map<size_t, HashSetValue>::iterator it = _mapValues.begin();
-		for (; it != _mapValues.end(); it++)
+		typename std::unordered_map<size_t, HashSetValue>::iterator it = _mapValues.begin();
+		for(;it!=_mapValues.end();it++)
 		{
 			(*it).second.Lock();
 			std::for_each((*it).second.setContent.begin(), (*it).second.setContent.end(), pfnFunc);
@@ -898,13 +963,13 @@ public:
 	}
 	void lock(std::string _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Lock();
 	}
 	void unlock(std::string _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Unlock();
 	}
@@ -914,7 +979,7 @@ template<int nHashSize /*= 8*/, int nStep /*= 1*/>
 size_t CSTXHashSet<std::string, nHashSize, nStep, CSTXDefaultStringHash<nHashSize, nStep>>::size()
 {
 	size_t sizeTotal = 0;
-	for (size_t i = 0; i < nHashSize; i++)
+	for(size_t i=0;i<nHashSize;i++)
 	{
 		sizeTotal += _mapValues[i].setContent.size();
 	}
@@ -925,7 +990,7 @@ size_t CSTXHashSet<std::string, nHashSize, nStep, CSTXDefaultStringHash<nHashSiz
 template<int nHashSize /*= 8*/, int nStep /*= 1*/>
 size_t CSTXHashSet<std::string, nHashSize, nStep, CSTXDefaultStringHash<nHashSize, nStep>>::erase(std::string _Keyval)
 {
-	size_t nHashed = THashClass()(_Keyval);
+	size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
 	HashSetValue &value = _mapValues[nHashed];
 	value.Lock();
 	size_t refResult = value.setContent.erase(_Keyval);
@@ -940,12 +1005,12 @@ size_t CSTXHashSet<std::string, nHashSize, nStep, CSTXDefaultStringHash<nHashSiz
 // CSTXHashSet for std::wstring
 
 template<int nHashSize, int nStep>
-class CSTXHashSet<std::wstring, nHashSize, nStep, CSTXDefaultWStringHash<nHashSize, nStep>>
+class CSTXHashSet < std::wstring, nHashSize, nStep, CSTXDefaultWStringHash<nHashSize, nStep>>
 {
 public:
 	CSTXHashSet()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i];	//Create Objects;
 		}
@@ -953,40 +1018,30 @@ public:
 protected:
 	struct HashSetValue
 	{
-		bool bCSInitialized;
-		CRITICAL_SECTION cs;
+		std::recursive_mutex mtx;
 		std::set<std::wstring> setContent;
 		HashSetValue()
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 		}
 		~HashSetValue()
 		{
-			DeleteCriticalSection(&cs);
 		}
 		HashSetValue(const HashSetValue &val)
 		{
-			InitializeCriticalSection(&cs);
-			bCSInitialized = true;
 			*this = val;
 		}
 		HashSetValue &operator=(const HashSetValue &val)
 		{
-			if (!bCSInitialized)
-				InitializeCriticalSection(&cs);
 			setContent = val.setContent;
 			return *this;
 		}
 		void Lock()
 		{
-			EnterCriticalSection(&cs);
-			lock.EnterLock();
+			mtx.lock();
 		}
 		void Unlock()
 		{
-			LeaveCriticalSection(&cs);
-			lock.LeaveLock();
+			mtx.unlock();
 		}
 
 	};
@@ -1005,16 +1060,16 @@ public:
 	size_t erase(std::wstring _Keyval);
 	void clear()
 	{
-		for (size_t i = 0; i < nHashSize; i++)
+		for(size_t i=0;i<nHashSize;i++)
 		{
 			_mapValues[i].setContent.clear();
 		}
 	}
 
 public:
-	_Type_iterator erase(_Type_iterator _itval)
+	_Type_iterator erase( _Type_iterator _itval )
 	{
-		size_t nHashed = THashClass()(*_itval);
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(*_itval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Lock();
 		_Type_iterator refResult = value.setContent.erase(_itval);
@@ -1022,9 +1077,9 @@ public:
 
 		return refResult;
 	}
-	_Type_iterator find(std::wstring _Keyval)
+	_Type_iterator find( std::wstring _Keyval )
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Lock();
 		_Type_iterator refResult = value.setContent.find(_Keyval);
@@ -1032,9 +1087,21 @@ public:
 
 		return refResult;
 	}
-	void insert(std::wstring _Keyval)
+	bool isValueExists(std::wstring _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		bool result = false;
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
+		HashSetValue &value = _mapValues[nHashed];
+		value.Lock();
+		_Type_iterator refResult = value.setContent.find(_Keyval);
+		if (refResult != value.setContent.end())
+			result = true;
+		value.Unlock();
+		return result;
+	}
+	void insert( std::wstring _Keyval )
+	{
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Lock();
 		value.setContent.insert(_Keyval);
@@ -1042,15 +1109,15 @@ public:
 	}
 	_Type_iterator end(std::wstring _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		return value.setContent.end();
 	}
 	template<typename TFunc>
 	void foreach(TFunc pfnFunc)
 	{
-		std::unordered_map<size_t, HashSetValue>::iterator it = _mapValues.begin();
-		for (; it != _mapValues.end(); it++)
+		typename std::unordered_map<size_t, HashSetValue>::iterator it = _mapValues.begin();
+		for(;it!=_mapValues.end();it++)
 		{
 			(*it).second.Lock();
 			std::for_each((*it).second.setContent.begin(), (*it).second.setContent.end(), pfnFunc);
@@ -1059,13 +1126,13 @@ public:
 	}
 	void lock(std::wstring _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Lock();
 	}
 	void unlock(std::wstring _Keyval)
 	{
-		size_t nHashed = THashClass()(_Keyval);
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
 		HashSetValue &value = _mapValues[nHashed];
 		value.Unlock();
 	}
@@ -1075,7 +1142,7 @@ template<int nHashSize /*= 8*/, int nStep /*= 1*/>
 size_t CSTXHashSet<std::wstring, nHashSize, nStep, CSTXDefaultWStringHash<nHashSize, nStep>>::size()
 {
 	size_t sizeTotal = 0;
-	for (size_t i = 0; i < nHashSize; i++)
+	for(size_t i=0;i<nHashSize;i++)
 	{
 		sizeTotal += _mapValues[i].setContent.size();
 	}
@@ -1086,7 +1153,7 @@ size_t CSTXHashSet<std::wstring, nHashSize, nStep, CSTXDefaultWStringHash<nHashS
 template<int nHashSize /*= 8*/, int nStep /*= 1*/>
 size_t CSTXHashSet<std::wstring, nHashSize, nStep, CSTXDefaultWStringHash<nHashSize, nStep>>::erase(std::wstring _Keyval)
 {
-	size_t nHashed = THashClass()(_Keyval);
+	size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
 	HashSetValue &value = _mapValues[nHashed];
 	value.Lock();
 	size_t refResult = value.setContent.erase(_Keyval);
