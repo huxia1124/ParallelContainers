@@ -35,9 +35,12 @@ Now:                    0 items!
 ```
 
 
-##![STL set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/stl_set.png)
-##![Concurrent set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/concurrent_set.png)
-##![High Performance set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/high_performance_set.png)
+##STL set![STL set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/stl_set.png)
+
+##Concurrent set![Concurrent set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/concurrent_set.png)
+
+##High Performance set![High Performance set](https://github.com/huxia1124/ParallelContainers/blob/master/SampleResults/high_performance_set.png)
+
 
 > The above results were measured under the following configuration:
 >> CPU: Intel Core i7 3740QM
