@@ -155,6 +155,14 @@ public:
 
 		return refResult;
 	}
+	void insertValue(TKey _Keyval, TValue newValue)
+	{
+		size_t nHashed = THashClass()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		value.mapContent[_Keyval] = newValue;
+		value.Unlock();
+	}
 	TValue findValue(TKey _Keyval, TValue defaultValue)
 	{
 		size_t nHashed = THashClass()(_Keyval);
@@ -357,6 +365,14 @@ public:
 
 		return refResult;
 	}
+	void insertValue(std::string _Keyval, TValue newValue)
+	{
+		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		value.mapContent[_Keyval] = newValue;
+		value.Unlock();
+	}
 	TValue findValue(std::string _Keyval, TValue defaultValue)
 	{
 		size_t nHashed = CSTXDefaultStringHash<nHashSize, nStep>()(_Keyval);
@@ -557,6 +573,14 @@ public:
 		value.Unlock();
 
 		return refResult;
+	}
+	void insertValue(std::wstring _Keyval, TValue newValue)
+	{
+		size_t nHashed = CSTXDefaultWStringHash<nHashSize, nStep>()(_Keyval);
+		HashMapValue &value = _mapValues[nHashed];
+		value.Lock();
+		value.mapContent[_Keyval] = newValue;
+		value.Unlock();
 	}
 	TValue findValue(std::wstring _Keyval, TValue defaultValue)
 	{
